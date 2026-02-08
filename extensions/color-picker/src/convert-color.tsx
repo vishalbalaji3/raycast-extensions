@@ -55,7 +55,14 @@ export default function ConvertColor(props: LaunchProps) {
   }
 
   if (!colorText) {
-    return <List isLoading={true} />;
+    return (
+      <List>
+        <List.EmptyView
+          title="No color found"
+          description="Select a valid color in any app, or provide it as an argument, then try again."
+        />
+      </List>
+    );
   }
 
   return (

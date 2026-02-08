@@ -1,7 +1,10 @@
 // Magnification settings
-pub const ZOOM: i32 = 8;
-pub const CAPTURE_SIZE: i32 = 19; // odd number for a center pixel
-pub const LOUPE_SIZE: i32 = CAPTURE_SIZE * ZOOM; // 152px
+pub const ZOOM: i32 = 11;
+pub const ZOOM_MIN: i32 = 11;
+pub const ZOOM_MAX: i32 = 22;
+// odd number for a center pixel, high value means more pixels captured around the center
+pub const CAPTURE_SIZE: i32 = 21; 
+pub const LOUPE_SIZE: i32 = CAPTURE_SIZE * ZOOM;
 
 // Border and layout
 pub const BORDER_W: i32 = 2;

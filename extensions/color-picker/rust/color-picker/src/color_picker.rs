@@ -22,6 +22,15 @@ use windows::{
 static mut PREVIEW_HEIGHT: i32 = 0;
 static mut TOTAL_HEIGHT: i32 = WINDOW_SIZE;
 
+// Dynamic zoom level
+static mut ZOOM_LEVEL: i32 = ZOOM;
+static mut LOUPE_SIZE_DYN: i32 = LOUPE_SIZE;
+static mut WINDOW_SIZE_DYN: i32 = WINDOW_SIZE;
+static mut CROSSHAIR_HALF_DYN: i32 = CROSSHAIR_HALF;
+
+// Window handles
+static mut LOUPE_HWND: HWND = unsafe { mem::zeroed() };
+
 static mut PICKED_COLOR: Option<(u8, u8, u8)> = None;
 static mut CANCELLED: bool = false;
 
@@ -55,7 +64,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 ReleaseDC(None, hscreen_dc);
 
                 // Center the loupe on the cursor (no clamping — let it go off-screen)
-                let half = WINDOW_SIZE / 2;
+                let half = WINDOW_SIZE_DYN / 2;
                 let lx = pt.x - half;
                 let ly = pt.y - half;
 
@@ -64,10 +73,13 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                     Some(HWND_TOPMOST),
                     lx,
                     ly,
-                    WINDOW_SIZE,
+                    WINDOW_SIZE_DYN,
                     TOTAL_HEIGHT,
                     SWP_NOACTIVATE | SWP_SHOWWINDOW,
                 );
+                
+                // Continuously hide cursor (system UI can reset it)
+                cursor::hide_cursor();
                 
                 let _ = InvalidateRect(Some(hwnd), None, false);
                 LRESULT(0)
@@ -78,17 +90,17 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
 
                 // Create memory DC for compositing
                 let hmem_dc = CreateCompatibleDC(Some(hdc));
-                let hbmp = CreateCompatibleBitmap(hdc, WINDOW_SIZE, TOTAL_HEIGHT);
+                let hbmp = CreateCompatibleBitmap(hdc, WINDOW_SIZE_DYN, TOTAL_HEIGHT);
                 let hold = SelectObject(hmem_dc, hbmp.into());
 
                 // Fill background with border color
-                let border_brush = CreateSolidBrush(COLORREF(0x00444444));
-                let bg_rect = RECT { left: 0, top: 0, right: WINDOW_SIZE, bottom: TOTAL_HEIGHT };
+                let border_brush = CreateSolidBrush(COLORREF(COLOR_BORDER_REF));
+                let bg_rect = RECT { left: 0, top: 0, right: WINDOW_SIZE_DYN, bottom: TOTAL_HEIGHT };
                 let _ = FillRect(hmem_dc, &bg_rect, border_brush);
                 let _ = DeleteObject(border_brush.into());
 
                 // Clip magnified content to inner circle
-                let inner_rgn = CreateEllipticRgn(BORDER_W, BORDER_W, BORDER_W + LOUPE_SIZE, BORDER_W + LOUPE_SIZE);
+                let inner_rgn = CreateEllipticRgn(BORDER_W, BORDER_W, BORDER_W + LOUPE_SIZE_DYN, BORDER_W + LOUPE_SIZE_DYN);
                 SelectClipRgn(hmem_dc, Some(inner_rgn));
 
                 // StretchBlt from cached snapshot (not live screen — avoids self-capture)
@@ -96,7 +108,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 let _ = StretchBlt(
                     hmem_dc,
                     BORDER_W, BORDER_W,
-                    LOUPE_SIZE, LOUPE_SIZE,
+                    LOUPE_SIZE_DYN, LOUPE_SIZE_DYN,
                     Some(SNAP_DC),
                     0, 0,
                     CAPTURE_SIZE, CAPTURE_SIZE,
@@ -104,13 +116,13 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 );
 
                 // Draw crosshair around the center pixel
-                drawing::draw_crosshair(hmem_dc);
+                drawing::draw_crosshair(hmem_dc, WINDOW_SIZE_DYN, CROSSHAIR_HALF_DYN, ZOOM_LEVEL);
 
                 // Remove clip region so we can draw the border ring
                 SelectClipRgn(hmem_dc, None);
 
                 // Draw circular border ring using GDI+ for anti-aliasing
-                drawing::draw_border_ring(hmem_dc);
+                drawing::draw_border_ring(hmem_dc, WINDOW_SIZE_DYN);
 
                 // --- Color preview rectangle below the loupe ---
                 // Get pixel color and prepare text
@@ -128,12 +140,12 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 // Calculate preview rectangle size with padding
                 let preview_width = text_size.cx + PREVIEW_PADDING_H * 2;
                 let preview_height = text_size.cy + PREVIEW_PADDING_V * 2;
-                let preview_left = (WINDOW_SIZE - preview_width) / 2;
-                let preview_top = WINDOW_SIZE + PREVIEW_GAP;
+                let preview_left = (WINDOW_SIZE_DYN - preview_width) / 2;
+                let preview_top = WINDOW_SIZE_DYN + PREVIEW_GAP;
 
                 // Update global height for window positioning (include border expansion)
                 PREVIEW_HEIGHT = preview_height;
-                TOTAL_HEIGHT = WINDOW_SIZE + PREVIEW_GAP + preview_height + PREVIEW_BORDER + 1;
+                TOTAL_HEIGHT = WINDOW_SIZE_DYN + PREVIEW_GAP + preview_height + PREVIEW_BORDER + 1;
 
                 let preview_rect = RECT {
                     left: preview_left,
@@ -163,10 +175,10 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 let _ = DeleteObject(hfont.into());
 
                 // Update window region dynamically based on text size
-                drawing::update_window_region(hwnd, &preview_rect);
+                drawing::update_window_region(hwnd, &preview_rect, WINDOW_SIZE_DYN);
 
                 // Blit composited result to window
-                let _ = BitBlt(hdc, 0, 0, WINDOW_SIZE, TOTAL_HEIGHT, Some(hmem_dc), 0, 0, SRCCOPY);
+                let _ = BitBlt(hdc, 0, 0, WINDOW_SIZE_DYN, TOTAL_HEIGHT, Some(hmem_dc), 0, 0, SRCCOPY);
 
                 SelectObject(hmem_dc, hold);
                 let _ = DeleteObject(hbmp.into());
@@ -174,6 +186,27 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 let _ = DeleteObject(inner_rgn.into());
 
                 let _ = EndPaint(hwnd, &ps);
+                LRESULT(0)
+            }
+            WM_MOUSEWHEEL => {
+                // Get wheel delta (positive = scroll up/zoom in, negative = scroll down/zoom out)
+                let delta = ((wparam.0 as i32) >> 16) as i16;
+                
+                if delta > 0 {
+                    // Scroll up: zoom in
+                    ZOOM_LEVEL = (ZOOM_LEVEL + 1).min(ZOOM_MAX);
+                } else if delta < 0 {
+                    // Scroll down: zoom out
+                    ZOOM_LEVEL = (ZOOM_LEVEL - 1).max(ZOOM_MIN);
+                }
+                
+                // Recalculate dimensions
+                LOUPE_SIZE_DYN = CAPTURE_SIZE * ZOOM_LEVEL;
+                WINDOW_SIZE_DYN = LOUPE_SIZE_DYN + BORDER_W * 2;
+                CROSSHAIR_HALF_DYN = ZOOM_LEVEL / 2;
+                
+                // Force redraw on the loupe window (not the input window)
+                let _ = InvalidateRect(Some(LOUPE_HWND), None, false);
                 LRESULT(0)
             }
             WM_LBUTTONDOWN | WM_RBUTTONDOWN => {
@@ -223,6 +256,12 @@ fn pick_color() -> std::result::Result<Option<Color>, String> {
 
         PICKED_COLOR = None;
         CANCELLED = false;
+
+        // Initialize dynamic zoom values
+        ZOOM_LEVEL = ZOOM;
+        LOUPE_SIZE_DYN = LOUPE_SIZE;
+        WINDOW_SIZE_DYN = WINDOW_SIZE;
+        CROSSHAIR_HALF_DYN = CROSSHAIR_HALF;
 
         // Initialize preview dimensions
         PREVIEW_HEIGHT = 30;
@@ -275,6 +314,9 @@ fn pick_color() -> std::result::Result<Option<Color>, String> {
             Some(hinstance),
             None,
         ).map_err(|e| e.to_string())?;
+
+        // Store loupe window handle for cross-window invalidation
+        LOUPE_HWND = hwnd;
 
         // Make the window semi-opaque
         let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), ALPHA_OPAQUE, LWA_ALPHA);
