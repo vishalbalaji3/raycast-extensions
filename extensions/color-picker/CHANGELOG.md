@@ -1,5 +1,11 @@
 # Color Picker Changelog
 
+## [Windows Support] - {PR_MERGE_DATE}
+
+- Added Eyedropper and color extractor for Windows using Rust
+- Updated Dependencies
+- Organized folder structure
+
 ## [Bugfix & Maintenance] - 2025-08-13
 
 - Fix the incorrect subtitle content in the `Convert Color` command

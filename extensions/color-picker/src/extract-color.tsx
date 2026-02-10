@@ -45,6 +45,7 @@ export default function Command() {
 
     if (path) {
       let extractColor: (path: string, colorCount: number, dominantOnly: boolean) => Promise<FinalColor[]>;
+
       if (isMac) {
         const { extractColor: extractColorSwift } = await import("swift:../swift/extract-color");
         extractColor = extractColorSwift;
@@ -53,9 +54,8 @@ export default function Command() {
         extractColor = extractColorRust;
       }
 
-      // Set dominantOnly to true
       try {
-        const colors = await extractColor(path, 40, false);
+        const colors = await extractColor(path, 40, false); // Set dominantOnly to true
 
         setColors(colors);
         toast.style = Toast.Style.Success;
