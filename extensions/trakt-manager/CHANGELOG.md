@@ -1,6 +1,6 @@
 # Trakt Manager Changelog
 
-## [Fix] - 2026-02-23
+## [Fix] - {PR_MERGE_DATE}
 
 - Added User-Agent header to API client to fix 403 errors caused by Trakt's Cloudflare WAF blocking requests without one
 
