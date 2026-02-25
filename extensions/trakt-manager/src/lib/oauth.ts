@@ -1,8 +1,6 @@
 import { OAuth } from "@raycast/api";
 import fetch from "node-fetch";
-import { TRAKT_API_URL, TRAKT_APP_URL, TRAKT_CLIENT_ID } from "./constants";
-
-const USER_AGENT = "trakt-manager-raycast/1.0";
+import { TRAKT_API_URL, TRAKT_APP_URL, TRAKT_CLIENT_ID, USER_AGENT } from "./constants";
 const TOKEN_URL = `${TRAKT_API_URL}/oauth/token`;
 
 const AuthClient = new OAuth.PKCEClient({
