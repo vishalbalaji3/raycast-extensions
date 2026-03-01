@@ -1,6 +1,6 @@
 # Trakt Manager Changelog
 
-## [Fix] - {PR_MERGE_DATE}
+## [Fix] - 2026-03-01
 
 - Added User-Agent header to OAuth token and refresh requests to prevent authentication failures
 
